@@ -1,0 +1,819 @@
+{% extends 'fullwidth_layout.html' %}
+
+{% block title %}Caller ID Management{% endblock %}
+
+{% block custom_css %}
+  <style>
+    .cid-tabs > .nav-tabs { margin-bottom: 1rem; }
+    .cid-tab-pane { padding-top: 1rem; }
+    .cid-actions-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .cid-numbers-textarea {
+      font-family: monospace;
+      font-size: 0.85rem;
+      min-height: 200px;
+    }
+    .cid-numbers-list {
+      max-height: 320px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 0.5rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+    .cid-numbers-list .cid-number-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 4px;
+      border-bottom: 1px solid #f1f1f1;
+    }
+    .cid-numbers-list .cid-number-row:hover { background: #fafafa; }
+    .cid-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #eef;
+      font-size: 0.75rem;
+      margin-right: 0.25rem;
+    }
+    .cid-status {
+      font-size: 0.85rem;
+      color: #666;
+    }
+    .cid-error { color: #b94a48; }
+    .cid-ok { color: #468847; }
+  </style>
+{% endblock %}
+
+{% block body %}
+<div class="content-inner-wrap">
+  <h2>Caller ID Management</h2>
+  <p class="text-muted">
+    Manage outbound caller-ID mask groups and bind them to clients (endpoint groups),
+    individual trunks, or per-prefix rules. On outbound calls Kamailio picks a random
+    number from the bound group and rewrites the From / P-Asserted-Identity headers.
+  </p>
+
+  <ul class="nav nav-tabs cid-tabs" role="tablist">
+    <li role="presentation" class="active"><a href="#tab-groups" data-toggle="tab" role="tab"><b>Mask Groups</b></a></li>
+    <li role="presentation"><a href="#tab-assignments" data-toggle="tab" role="tab"><b>Assignments</b></a></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ============================================================
+         Mask Groups tab
+         ============================================================ -->
+    <div role="tabpanel" class="tab-pane fade in active cid-tab-pane" id="tab-groups">
+      <div class="cid-actions-bar">
+        <div>
+          <button id="btn-new-group" class="btn btn-success btn-sm">+ New Mask Group</button>
+        </div>
+        <div class="cid-status" id="groups-status"></div>
+      </div>
+
+      <p class="text-muted">
+        <small>
+          After creating a group and adding numbers, switch to the <strong>Assignments</strong> tab
+          (or click <em>Assign</em> on a row) to bind it to a client / trunk / prefix.
+        </small>
+      </p>
+
+      <table id="groups-table" class="table table-striped table-bordered">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Numbers</th>
+            <th style="width: 280px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- ============================================================
+         Assignments tab
+         ============================================================ -->
+    <div role="tabpanel" class="tab-pane fade cid-tab-pane" id="tab-assignments">
+      <div class="cid-actions-bar">
+        <div>
+          <button id="btn-new-assignment" class="btn btn-success btn-sm">+ New Assignment</button>
+        </div>
+        <div class="cid-status" id="assignments-status"></div>
+      </div>
+
+      <table id="assignments-table" class="table table-striped table-bordered table-sm">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Type</th>
+            <th>Endpoint Group</th>
+            <th>Endpoint (Trunk)</th>
+            <th>Prefix</th>
+            <th>Mask Group</th>
+            <th>Enabled</th>
+            <th style="width: 140px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================================================================
+     Group editor modal — create/rename, edit numbers
+     ================================================================ -->
+<div class="modal fade" id="modal-group" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-group-title">Mask Group</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="group-id">
+
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" class="form-control" id="group-name" maxlength="128">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" class="form-control" id="group-description" maxlength="255">
+        </div>
+
+        <hr>
+
+        <div id="group-numbers-section" class="hidden">
+          <h6>Numbers
+            <span class="cid-pill" id="group-numbers-count">0</span>
+            <span class="cid-pill">max 20,000</span>
+          </h6>
+
+          <div class="form-group">
+            <label>Bulk import (one per line, or comma/semicolon separated)</label>
+            <textarea id="group-numbers-input" class="form-control cid-numbers-textarea"
+                      placeholder="+15551234567&#10;+15557654321&#10;..."></textarea>
+            <small class="form-text text-muted">
+              Accepted format: digits with optional leading +, * or # (max 32 chars per number).
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label>Or upload a CSV / TXT file</label>
+            <input type="file" id="group-numbers-file" accept=".csv,.txt,text/plain,text/csv">
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="radio" name="bulk-mode" value="append" checked> Append (skip duplicates)
+            </label>
+            <label style="margin-left: 1rem;">
+              <input type="radio" name="bulk-mode" value="replace"> Replace (wipe existing first)
+            </label>
+          </div>
+
+          <button id="btn-bulk-add" class="btn btn-primary btn-sm">Import Numbers</button>
+          <button id="btn-clear-numbers" class="btn btn-danger btn-sm" style="float: right;">Clear All</button>
+
+          <hr>
+
+          <div class="form-group">
+            <label>Existing numbers (paginated)
+              <input type="search" id="numbers-search" class="form-control form-control-sm"
+                     style="display: inline-block; width: 200px; margin-left: 1rem;"
+                     placeholder="search...">
+            </label>
+            <div class="cid-numbers-list" id="numbers-list"></div>
+            <div class="cid-actions-bar">
+              <button class="btn btn-sm btn-secondary" id="numbers-prev">&laquo; Prev</button>
+              <span class="cid-status" id="numbers-pageinfo"></span>
+              <button class="btn btn-sm btn-secondary" id="numbers-next">Next &raquo;</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="group-modal-status" class="cid-status"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="btn-save-group">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     Delete-group confirmation modal
+     ================================================================ -->
+<div class="modal fade" id="modal-delete-group" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete Mask Group</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Delete mask group <strong id="delete-group-name"></strong>?</p>
+        <p class="text-danger">All numbers and assignments referencing this group will be removed.</p>
+        <input type="hidden" id="delete-group-id">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-delete-group">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     New assignment modal
+     ================================================================ -->
+<div class="modal fade" id="modal-assignment" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New Caller-ID Assignment</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Mask group</label>
+          <select id="a-mask-group" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Scope</label>
+          <select id="a-type" class="form-control">
+            <option value="endpointgroup">Client (Endpoint Group)</option>
+            <option value="endpoint">Trunk (Endpoint)</option>
+            <option value="prefix">Prefix on a Trunk</option>
+          </select>
+        </div>
+        <div class="form-group" id="row-gwgroup">
+          <label>Endpoint Group</label>
+          <select id="a-gwgroupid" class="form-control"></select>
+        </div>
+        <div class="form-group hidden" id="row-gwid">
+          <label>Endpoint (Trunk)</label>
+          <select id="a-gwid" class="form-control"></select>
+          <small class="form-text text-muted">Pick the endpoint group above to filter trunks.</small>
+        </div>
+        <div class="form-group hidden" id="row-prefix">
+          <label>Prefix (1–8 digits)</label>
+          <input type="text" id="a-prefix" class="form-control" maxlength="8" placeholder="e.g. 521800">
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="a-enabled" checked> Enabled
+          </label>
+        </div>
+        <div id="assignment-modal-status" class="cid-status"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-save-assignment">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block custom_js %}
+<script type="application/javascript">
+(function () {
+  'use strict';
+
+  // CSRF is exempted on /api/v1/calleridmasks (csrf.exempt) but the
+  // browser still needs to send credentials so the Flask session cookie
+  // authenticates the request.
+  var fetchOpts = function (extra) {
+    var opts = Object.assign({ credentials: 'same-origin', headers: { 'Accept': 'application/json' } }, extra || {});
+    return opts;
+  };
+  var apiBase = '/api/v1/calleridmasks';
+
+  function setStatus(elId, msg, kind) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'cid-status' + (kind === 'err' ? ' cid-error' : kind === 'ok' ? ' cid-ok' : '');
+  }
+
+  function apiError(resp, body) {
+    var msg = (body && body.msg) ? body.msg : ('HTTP ' + resp.status);
+    return new Error(msg);
+  }
+
+  async function apiJSON(method, path, payload) {
+    var opts = fetchOpts({ method: method });
+    if (payload !== undefined) {
+      opts.headers = Object.assign({}, opts.headers, { 'Content-Type': 'application/json' });
+      opts.body = JSON.stringify(payload);
+    }
+    var resp = await fetch(apiBase + path, opts);
+    var body = null;
+    try { body = await resp.json(); } catch (e) { /* ignore */ }
+    if (!resp.ok) throw apiError(resp, body);
+    return body || {};
+  }
+
+  // ---------------------------------------------------------------------
+  // Endpoint groups + endpoints discovery (re-using the existing API)
+  // ---------------------------------------------------------------------
+  async function loadEndpointGroups() {
+    var resp = await fetch('/api/v1/endpointgroups', fetchOpts());
+    if (!resp.ok) return [];
+    var body = await resp.json();
+    var data = body && body.data ? body.data : [];
+    // Some installs return [{endpointgroups:[...]}], others a flat list.
+    if (data.length && data[0] && Array.isArray(data[0].endpointgroups)) {
+      return data[0].endpointgroups;
+    }
+    return data;
+  }
+
+  async function loadEndpointGroupDetail(gwgroupid) {
+    var resp = await fetch('/api/v1/endpointgroups/' + gwgroupid, fetchOpts());
+    if (!resp.ok) return null;
+    var body = await resp.json();
+    return (body && body.data && body.data[0]) || null;
+  }
+
+  // ---------------------------------------------------------------------
+  // Mask Groups tab
+  // ---------------------------------------------------------------------
+  var groupsCache = [];
+
+  async function refreshGroupsTable() {
+    setStatus('groups-status', 'loading...');
+    try {
+      var body = await apiJSON('GET', '/groups');
+      groupsCache = body.data || [];
+      var tbody = document.querySelector('#groups-table tbody');
+      tbody.innerHTML = '';
+      groupsCache.forEach(function (g) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + g.id + '</td>' +
+          '<td></td>' +
+          '<td></td>' +
+          '<td>' + (g.count || 0) + '</td>' +
+          '<td>' +
+            '<button class="btn btn-xs btn-primary" data-action="edit" data-id="' + g.id + '">Edit</button> ' +
+            '<button class="btn btn-xs btn-success" data-action="assign" data-id="' + g.id + '">Assign</button> ' +
+            '<button class="btn btn-xs btn-danger" data-action="delete" data-id="' + g.id + '">Delete</button>' +
+          '</td>';
+        tr.children[1].textContent = g.name;
+        tr.children[2].textContent = g.description || '';
+        tbody.appendChild(tr);
+      });
+      setStatus('groups-status', groupsCache.length + ' group(s)');
+    } catch (e) {
+      setStatus('groups-status', e.message, 'err');
+    }
+  }
+
+  document.querySelector('#groups-table tbody').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button');
+    if (!btn) return;
+    var id = parseInt(btn.getAttribute('data-id'), 10);
+    var action = btn.getAttribute('data-action');
+    if (action === 'edit') openGroupModal(id);
+    else if (action === 'delete') openDeleteGroupModal(id);
+    else if (action === 'assign') openAssignmentModal(id);
+  });
+
+  document.getElementById('btn-new-group').addEventListener('click', function () {
+    openGroupModal(null);
+  });
+
+  // -------------------- group editor modal --------------------
+  var currentGroupId = null;
+  var numbersPage = 1;
+  var numbersPerPage = 50;
+  var numbersTotal = 0;
+  var numbersSearch = '';
+
+  function openGroupModal(id) {
+    currentGroupId = id;
+    document.getElementById('group-id').value = id || '';
+    document.getElementById('modal-group-title').textContent = id ? 'Edit Mask Group' : 'New Mask Group';
+    document.getElementById('group-modal-status').textContent = '';
+    if (id) {
+      var g = groupsCache.find(function (x) { return x.id === id; }) || {};
+      document.getElementById('group-name').value = g.name || '';
+      document.getElementById('group-description').value = g.description || '';
+      document.getElementById('group-numbers-section').classList.remove('hidden');
+      document.getElementById('group-numbers-count').textContent = g.count || 0;
+      numbersPage = 1;
+      numbersSearch = '';
+      document.getElementById('numbers-search').value = '';
+      refreshNumbersList();
+    } else {
+      document.getElementById('group-name').value = '';
+      document.getElementById('group-description').value = '';
+      document.getElementById('group-numbers-section').classList.add('hidden');
+    }
+    $('#modal-group').modal('show');
+  }
+
+  document.getElementById('btn-save-group').addEventListener('click', async function () {
+    var name = document.getElementById('group-name').value.trim();
+    var description = document.getElementById('group-description').value.trim();
+    if (!name) {
+      setStatus('group-modal-status', 'name is required', 'err');
+      return;
+    }
+    try {
+      if (currentGroupId) {
+        await apiJSON('PATCH', '/groups/' + currentGroupId, { name: name, description: description });
+      } else {
+        var resp = await apiJSON('POST', '/groups', { name: name, description: description });
+        if (resp && resp.data && resp.data[0]) {
+          currentGroupId = resp.data[0].id;
+          document.getElementById('group-id').value = currentGroupId;
+          document.getElementById('modal-group-title').textContent = 'Edit Mask Group';
+          document.getElementById('group-numbers-section').classList.remove('hidden');
+        }
+      }
+      setStatus('group-modal-status', 'saved', 'ok');
+      refreshGroupsTable();
+    } catch (e) {
+      setStatus('group-modal-status', e.message, 'err');
+    }
+  });
+
+  // Numbers paginated list
+  async function refreshNumbersList() {
+    if (!currentGroupId) return;
+    var listEl = document.getElementById('numbers-list');
+    listEl.innerHTML = 'loading...';
+    try {
+      var url = '/groups/' + currentGroupId + '/numbers?page=' + numbersPage + '&per_page=' + numbersPerPage;
+      if (numbersSearch) url += '&q=' + encodeURIComponent(numbersSearch);
+      var body = await apiJSON('GET', url);
+      var rows = body.data || [];
+      numbersTotal = body.total || 0;
+      listEl.innerHTML = '';
+      if (rows.length === 0) {
+        listEl.innerHTML = '<em>(no numbers)</em>';
+      } else {
+        rows.forEach(function (r) {
+          var row = document.createElement('div');
+          row.className = 'cid-number-row';
+          row.innerHTML = '<span></span>' +
+            '<button class="btn btn-xs btn-link cid-error" data-id="' + r.id + '">remove</button>';
+          row.children[0].textContent = r.number + '  (idx ' + r.idx + ')';
+          listEl.appendChild(row);
+        });
+      }
+      var lastPage = Math.max(1, Math.ceil(numbersTotal / numbersPerPage));
+      document.getElementById('numbers-pageinfo').textContent =
+        'page ' + numbersPage + ' / ' + lastPage + ' — ' + numbersTotal + ' total';
+      document.getElementById('numbers-prev').disabled = (numbersPage <= 1);
+      document.getElementById('numbers-next').disabled = (numbersPage >= lastPage);
+    } catch (e) {
+      listEl.innerHTML = '<span class="cid-error">' + e.message + '</span>';
+    }
+  }
+
+  document.getElementById('numbers-list').addEventListener('click', async function (ev) {
+    var btn = ev.target.closest('button[data-id]');
+    if (!btn) return;
+    var nid = btn.getAttribute('data-id');
+    if (!confirm('Remove this number?')) return;
+    try {
+      await apiJSON('DELETE', '/groups/' + currentGroupId + '/numbers/' + nid);
+      await refreshNumbersList();
+      // refreshNumbersList sets numbersTotal as a side effect once the
+      // server returns; reuse it to keep the badge in sync.
+      document.getElementById('group-numbers-count').textContent = numbersTotal;
+      refreshGroupsTable();
+    } catch (e) {
+      setStatus('group-modal-status', e.message, 'err');
+    }
+  });
+
+  document.getElementById('numbers-prev').addEventListener('click', function () {
+    if (numbersPage > 1) { numbersPage -= 1; refreshNumbersList(); }
+  });
+  document.getElementById('numbers-next').addEventListener('click', function () {
+    numbersPage += 1; refreshNumbersList();
+  });
+  // Debounced search
+  var searchTimer = null;
+  document.getElementById('numbers-search').addEventListener('input', function (ev) {
+    clearTimeout(searchTimer);
+    var v = ev.target.value;
+    searchTimer = setTimeout(function () {
+      numbersSearch = v.trim();
+      numbersPage = 1;
+      refreshNumbersList();
+    }, 250);
+  });
+
+  // Bulk add — supports both textarea and file. File takes precedence.
+  document.getElementById('btn-bulk-add').addEventListener('click', async function () {
+    if (!currentGroupId) {
+      setStatus('group-modal-status', 'save the group first to add numbers', 'err');
+      return;
+    }
+    var fileEl = document.getElementById('group-numbers-file');
+    var taEl = document.getElementById('group-numbers-input');
+    var mode = document.querySelector('input[name="bulk-mode"]:checked').value;
+
+    var raw = '';
+    if (fileEl.files && fileEl.files[0]) {
+      raw = await fileEl.files[0].text();
+    } else {
+      raw = taEl.value;
+    }
+    if (!raw.trim()) {
+      setStatus('group-modal-status', 'paste numbers or pick a file first', 'err');
+      return;
+    }
+    setStatus('group-modal-status', 'importing...');
+    try {
+      var resp = await apiJSON('POST', '/groups/' + currentGroupId + '/numbers/bulk', {
+        numbers: raw, mode: mode,
+      });
+      var info = (resp.data && resp.data[0]) || {};
+      setStatus('group-modal-status',
+        'added ' + (info.added || 0)
+        + ', skipped ' + (info.skipped_duplicate || 0) + ' duplicate'
+        + ', ' + (info.skipped_invalid || 0) + ' invalid'
+        + ' — total in group: ' + (info.total_in_group || 0), 'ok');
+      taEl.value = '';
+      fileEl.value = '';
+      numbersPage = 1;
+      // Update the in-modal count badge directly — refreshGroupsTable
+      // updates the table outside the modal but doesn't touch the pill.
+      document.getElementById('group-numbers-count').textContent = info.total_in_group || 0;
+      refreshNumbersList();
+      refreshGroupsTable();
+    } catch (e) {
+      setStatus('group-modal-status', e.message, 'err');
+    }
+  });
+
+  document.getElementById('btn-clear-numbers').addEventListener('click', async function () {
+    if (!currentGroupId) return;
+    if (!confirm('Delete ALL numbers in this group? Assignments will remain but the group will be empty.')) return;
+    try {
+      await apiJSON('POST', '/groups/' + currentGroupId + '/numbers/clear');
+      setStatus('group-modal-status', 'cleared', 'ok');
+      numbersPage = 1;
+      document.getElementById('group-numbers-count').textContent = 0;
+      refreshNumbersList();
+      refreshGroupsTable();
+    } catch (e) {
+      setStatus('group-modal-status', e.message, 'err');
+    }
+  });
+
+  // -------------------- delete group modal --------------------
+  function openDeleteGroupModal(id) {
+    var g = groupsCache.find(function (x) { return x.id === id; }) || {};
+    document.getElementById('delete-group-id').value = id;
+    document.getElementById('delete-group-name').textContent = g.name || ('id ' + id);
+    $('#modal-delete-group').modal('show');
+  }
+  document.getElementById('btn-confirm-delete-group').addEventListener('click', async function () {
+    var id = document.getElementById('delete-group-id').value;
+    try {
+      await apiJSON('DELETE', '/groups/' + id);
+      $('#modal-delete-group').modal('hide');
+      refreshGroupsTable();
+      refreshAssignmentsTable();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Assignments tab
+  // ---------------------------------------------------------------------
+  var assignmentsCache = [];
+  var endpointGroupsCache = [];
+  var endpointsByGroup = {};   // gwgroupid -> [{gwid, name, ...}]
+
+  async function refreshAssignmentsTable() {
+    setStatus('assignments-status', 'loading...');
+    try {
+      var body = await apiJSON('GET', '/assignments');
+      assignmentsCache = body.data || [];
+      // Group lookup needs the same groups list as Mask Groups tab.
+      if (groupsCache.length === 0) {
+        var g = await apiJSON('GET', '/groups');
+        groupsCache = g.data || [];
+      }
+      var groupNameById = {};
+      groupsCache.forEach(function (g) { groupNameById[g.id] = g.name; });
+
+      // For nicer display we also try to resolve gwgroup / gw names
+      // against the existing carriergroups/endpointgroups APIs.
+      if (endpointGroupsCache.length === 0) {
+        try { endpointGroupsCache = await loadEndpointGroups(); } catch (_) {}
+      }
+      var egNameById = {};
+      endpointGroupsCache.forEach(function (eg) {
+        egNameById[eg.gwgroupid || eg.id] = eg.name;
+      });
+
+      var tbody = document.querySelector('#assignments-table tbody');
+      tbody.innerHTML = '';
+      assignmentsCache.forEach(function (a) {
+        var tr = document.createElement('tr');
+        var egLabel = a.gwgroupid ? (egNameById[a.gwgroupid] || a.gwgroupid) : '';
+        tr.innerHTML =
+          '<td>' + a.id + '</td>' +
+          '<td>' + a.assignment_type + '</td>' +
+          '<td></td>' +
+          '<td>' + (a.gwid || '') + '</td>' +
+          '<td>' + (a.prefix || '') + '</td>' +
+          '<td></td>' +
+          '<td>' +
+            '<input type="checkbox" data-action="toggle" data-id="' + a.id + '" ' +
+              (a.enabled ? 'checked' : '') + '>' +
+          '</td>' +
+          '<td>' +
+            '<button class="btn btn-sm btn-danger" data-action="delete" data-id="' + a.id + '">Delete</button>' +
+          '</td>';
+        tr.children[2].textContent = egLabel;
+        tr.children[5].textContent = groupNameById[a.mask_group_id] || ('group ' + a.mask_group_id);
+        tbody.appendChild(tr);
+      });
+      setStatus('assignments-status', assignmentsCache.length + ' assignment(s)');
+    } catch (e) {
+      setStatus('assignments-status', e.message, 'err');
+    }
+  }
+
+  document.querySelector('#assignments-table tbody').addEventListener('click', async function (ev) {
+    var t = ev.target;
+    var id = t.getAttribute('data-id');
+    var action = t.getAttribute('data-action');
+    if (!id || !action) return;
+    if (action === 'delete') {
+      if (!confirm('Delete this assignment?')) return;
+      try {
+        await apiJSON('DELETE', '/assignments/' + id);
+        refreshAssignmentsTable();
+      } catch (e) { alert(e.message); }
+    } else if (action === 'toggle') {
+      try {
+        await apiJSON('PATCH', '/assignments/' + id, { enabled: t.checked });
+      } catch (e) {
+        t.checked = !t.checked;
+        alert(e.message);
+      }
+    }
+  });
+
+  // Open the assignment modal. If preselectedGroupId is given, the
+  // mask-group dropdown is pre-selected to that value (used by the
+  // "Assign" button on the Mask Groups table row).
+  async function openAssignmentModal(preselectedGroupId) {
+    var sel = document.getElementById('a-mask-group');
+    sel.innerHTML = '';
+    if (groupsCache.length === 0) {
+      try { groupsCache = (await apiJSON('GET', '/groups')).data || []; } catch (_) {}
+    }
+    if (groupsCache.length === 0) {
+      alert('Create a Mask Group first (with at least one number) before creating an assignment.');
+      return;
+    }
+    groupsCache.forEach(function (g) {
+      var o = document.createElement('option');
+      o.value = g.id; o.textContent = g.name + '  (' + (g.count || 0) + ' numbers)';
+      sel.appendChild(o);
+    });
+    if (preselectedGroupId) sel.value = String(preselectedGroupId);
+
+    var egSel = document.getElementById('a-gwgroupid');
+    egSel.innerHTML = '';
+    try {
+      endpointGroupsCache = await loadEndpointGroups();
+    } catch (_) {}
+    if (endpointGroupsCache.length === 0) {
+      var blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '(no endpoint groups defined yet — create one in Endpoint Groups)';
+      egSel.appendChild(blank);
+    } else {
+      endpointGroupsCache.forEach(function (eg) {
+        var o = document.createElement('option');
+        o.value = eg.gwgroupid || eg.id;
+        o.textContent = eg.name + '  (id ' + (eg.gwgroupid || eg.id) + ')';
+        egSel.appendChild(o);
+      });
+    }
+
+    document.getElementById('a-prefix').value = '';
+    document.getElementById('a-enabled').checked = true;
+    document.getElementById('assignment-modal-status').textContent = '';
+    document.getElementById('a-type').value = 'endpointgroup';
+    onAssignmentTypeChange();
+    await refreshGwidsForSelectedGroup();
+
+    $('#modal-assignment').modal('show');
+  }
+
+  document.getElementById('btn-new-assignment').addEventListener('click', function () {
+    openAssignmentModal(null);
+  });
+
+  function onAssignmentTypeChange() {
+    var t = document.getElementById('a-type').value;
+    document.getElementById('row-gwgroup').classList.toggle('hidden', false);
+    document.getElementById('row-gwid').classList.toggle('hidden', t === 'endpointgroup');
+    document.getElementById('row-prefix').classList.toggle('hidden', t !== 'prefix');
+  }
+  document.getElementById('a-type').addEventListener('change', onAssignmentTypeChange);
+
+  async function refreshGwidsForSelectedGroup() {
+    var egSel = document.getElementById('a-gwgroupid');
+    var gwidSel = document.getElementById('a-gwid');
+    gwidSel.innerHTML = '';
+    var gwgroupid = egSel.value;
+    if (!gwgroupid) return;
+    if (!endpointsByGroup[gwgroupid]) {
+      var detail = await loadEndpointGroupDetail(gwgroupid);
+      // Different installs surface endpoints under different keys; try a few.
+      var eps = [];
+      if (detail) {
+        if (Array.isArray(detail.endpoints)) eps = detail.endpoints;
+        else if (Array.isArray(detail.gwlist)) eps = detail.gwlist.map(function (gw) {
+          return (typeof gw === 'object') ? gw : { gwid: gw, name: 'gw ' + gw };
+        });
+      }
+      endpointsByGroup[gwgroupid] = eps;
+    }
+    endpointsByGroup[gwgroupid].forEach(function (ep) {
+      var o = document.createElement('option');
+      o.value = ep.gwid;
+      o.textContent = (ep.name || ep.description || ep.address || ('gw ' + ep.gwid)) + '  (id ' + ep.gwid + ')';
+      gwidSel.appendChild(o);
+    });
+  }
+  document.getElementById('a-gwgroupid').addEventListener('change', refreshGwidsForSelectedGroup);
+
+  document.getElementById('btn-save-assignment').addEventListener('click', async function () {
+    var atype = document.getElementById('a-type').value;
+    var payload = {
+      mask_group_id: parseInt(document.getElementById('a-mask-group').value, 10),
+      assignment_type: atype,
+      enabled: document.getElementById('a-enabled').checked,
+    };
+    var gwgroupid = document.getElementById('a-gwgroupid').value;
+    var gwid = document.getElementById('a-gwid').value;
+    var prefix = document.getElementById('a-prefix').value.trim();
+    if (atype === 'endpointgroup') {
+      if (!gwgroupid) return setStatus('assignment-modal-status', 'pick an endpoint group', 'err');
+      payload.gwgroupid = parseInt(gwgroupid, 10);
+    } else if (atype === 'endpoint') {
+      if (!gwid) return setStatus('assignment-modal-status', 'pick a trunk', 'err');
+      payload.gwid = parseInt(gwid, 10);
+      if (gwgroupid) payload.gwgroupid = parseInt(gwgroupid, 10);
+    } else if (atype === 'prefix') {
+      if (!gwid) return setStatus('assignment-modal-status', 'pick a trunk', 'err');
+      if (!prefix) return setStatus('assignment-modal-status', 'enter a prefix', 'err');
+      payload.gwid = parseInt(gwid, 10);
+      payload.prefix = prefix;
+      if (gwgroupid) payload.gwgroupid = parseInt(gwgroupid, 10);
+    }
+    try {
+      await apiJSON('POST', '/assignments', payload);
+      $('#modal-assignment').modal('hide');
+      refreshAssignmentsTable();
+    } catch (e) {
+      setStatus('assignment-modal-status', e.message, 'err');
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Tab activation: lazy-load assignments only when first shown.
+  // ---------------------------------------------------------------------
+  var assignmentsLoaded = false;
+  $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+    if (e.target.getAttribute('href') === '#tab-assignments' && !assignmentsLoaded) {
+      assignmentsLoaded = true;
+      refreshAssignmentsTable();
+    }
+  });
+
+  // Initial load
+  refreshGroupsTable();
+})();
+</script>
+{% endblock %}

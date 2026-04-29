@@ -585,6 +585,70 @@ class dSIPUser(object):
 class DsipGwgroup2LB(object):
     pass
 
+
+class CallerIdMaskGroups(object):
+    """
+    Schema for dsip_caller_id_mask_groups table.
+
+    A mask group is a named set of caller-ID numbers that can be assigned
+    (via :class:`CallerIdMaskAssignments`) to an endpoint group, a single
+    endpoint, or a per-prefix rule on an endpoint. On outbound calls the
+    Kamailio CALLER_ID_MASK route picks a random number from the group and
+    rewrites the From / P-Asserted-Identity headers.
+    """
+
+    def __init__(self, name, description=''):
+        self.name = name
+        self.description = description
+
+    pass
+
+
+class CallerIdMasks(object):
+    """
+    Schema for dsip_caller_id_masks table.
+
+    A single phone number that belongs to a :class:`CallerIdMaskGroups`.
+    The ``idx`` field is a 0-based dense index used as the htable key
+    suffix so the Kamailio route can select a random number with
+    ``$RANDOM mod count``.
+    """
+
+    def __init__(self, mask_group_id, number, idx):
+        self.mask_group_id = mask_group_id
+        self.number = number
+        self.idx = idx
+
+    pass
+
+
+class CallerIdMaskAssignments(object):
+    """
+    Schema for dsip_caller_id_mask_assignments table.
+
+    Binds a mask group to a scope. ``assignment_type`` selects which
+    columns are used:
+
+    * ``endpointgroup`` — uses ``gwgroupid`` (applies to all trunks of the client)
+    * ``endpoint``      — uses ``gwid`` (applies to one trunk)
+    * ``prefix``        — uses ``gwid`` + ``prefix`` (applies when the
+      dialed number on that trunk starts with ``prefix``)
+    """
+
+    TYPE_ENDPOINTGROUP = 'endpointgroup'
+    TYPE_ENDPOINT = 'endpoint'
+    TYPE_PREFIX = 'prefix'
+
+    def __init__(self, mask_group_id, assignment_type, gwgroupid=None, gwid=None, prefix=None, enabled=1):
+        self.mask_group_id = mask_group_id
+        self.assignment_type = assignment_type
+        self.gwgroupid = gwgroupid
+        self.gwid = gwid
+        self.prefix = prefix
+        self.enabled = enabled
+
+    pass
+
 class DsipSettings(OrderedDict):
     """
     Identifies the contained data as already formatted for the table
@@ -741,6 +805,9 @@ def createSessionObjects():
     dsip_user = Table('dsip_user', mapper.metadata, autoload_replace=True, autoload_with=db_engine)
     # TODO: this is temporary and will be refactored
     dsip_gwgroup2lb = Table('dsip_gwgroup2lb', mapper.metadata, autoload_replace=True, autoload_with=db_engine)
+    dsip_caller_id_mask_groups = Table('dsip_caller_id_mask_groups', mapper.metadata, autoload_replace=True, autoload_with=db_engine)
+    dsip_caller_id_masks = Table('dsip_caller_id_masks', mapper.metadata, autoload_replace=True, autoload_with=db_engine)
+    dsip_caller_id_mask_assignments = Table('dsip_caller_id_mask_assignments', mapper.metadata, autoload_replace=True, autoload_with=db_engine)
 
     # dr_gw_lists_alias = select([
     #     dr_gw_lists.c.id.label("drlist_id"),
@@ -777,6 +844,9 @@ def createSessionObjects():
     mapper.map_imperatively(dSIPUser, dsip_user)
     # TODO: this is temporary and will be refactored
     mapper.map_imperatively(DsipGwgroup2LB, dsip_gwgroup2lb)
+    mapper.map_imperatively(CallerIdMaskGroups, dsip_caller_id_mask_groups)
+    mapper.map_imperatively(CallerIdMasks, dsip_caller_id_masks)
+    mapper.map_imperatively(CallerIdMaskAssignments, dsip_caller_id_mask_assignments)
 
     # mapper.map_imperatively(GatewayGroups, gw_join, properties={
     #     'id': [dr_groups.c.id, dr_gw_lists_alias.c.drlist_id],

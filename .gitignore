@@ -5,8 +5,11 @@
 /resources/terraform/do/.terraform
 /resources/terraform/do/*.hcl
 /resources/terraform/do/terraform.tfvars
-*/__pycache__/
+__pycache__/
 venv/
+*.bak/
+.local_api_patch.bak/
+.sbc_install.bak/
 # TODO: these following files could be generated elsewhere
 # adding them to python path where needed to cleanup project dir
 docs/build/

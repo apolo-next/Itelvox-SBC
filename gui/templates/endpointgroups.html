@@ -1,3 +1,4 @@
+<!-- LOCAL_API_PATCH:cdr_tabs -->
 {% extends 'table_layout.html' %}
 
 {% block title %}Endpoint Groups{% endblock %}
@@ -89,9 +90,13 @@
           <li role="presentation">
             <a href="#notifications" name="notifications-toggle" data-toggle="tab">Notifications</a>
           </li>
+          <!--
+          <!--
           <li role="presentation">
             <a href="#cdr" name="cdr-toggle" data-toggle="tab">CDR</a>
           </li>
+          -->
+          -->
           <li role="presentation">
             <a href="#fusionpbx" name="fusion-toggle" data-toggle="tab">FusionPBX</a>
           </li>
@@ -201,6 +206,38 @@
             <input class="call_timeout form-control" type="number" name="call_timeout" placeholder="Maximum Call Length (seconds)"
                    autocomplete="off" min="0">
           </div>
+                  {# LOCAL_API_PATCH:prefix_acl_ui — Allowed Destination Prefixes (edit) #}
+          <div class="form-group">
+            <label for="allowed_prefixes_edit" style="font-weight:normal">
+              Allowed Destination Prefixes
+              <small class="text-muted">(3–5 digits, one per line or comma-separated; leave blank to allow any)</small>
+            </label>
+            <textarea id="allowed_prefixes_edit" class="allowed_prefixes form-control" name="allowed_prefixes" rows="4" placeholder="301&#10;30245&#10;445"></textarea>
+          </div>
+                  {# LOCAL_API_PATCH:outbound_prefix_rules_ui — Outbound Prefix Manipulation (edit) #}
+          <div class="form-group">
+            <label style="font-weight:normal">
+              Outbound Prefix Manipulation
+              <small class="text-muted">
+                Per dialed-prefix strip + prepend on the way out
+                (1–8 digit prefix; longest match wins)
+              </small>
+            </label>
+            <table id="outbound_prefix_rules_edit" class="outbound_prefix_rules table table-condensed" style="margin-bottom: 6px;">
+              <thead>
+                <tr>
+                  <th style="width: 30%">Prefix</th>
+                  <th style="width: 18%">Strip</th>
+                  <th style="width: 38%">Prepend</th>
+                  <th style="width: 14%"></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <button type="button" class="btn btn-default btn-xs outbound_prefix_add_row" data-target="#outbound_prefix_rules_edit">
+              <span class="glyphicon glyphicon-plus"></span> Add rule
+            </button>
+          </div>
         </div> <!-- end of call settings tab -->
 
         <div id="notifications" class="tab-pane fade in" name="notifications-toggle">
@@ -214,13 +251,12 @@
           </div>
         </div> <!-- end of notifications tab -->
 
+        <!--
         <div id="cdr" class="tab-pane fade in" name="cdr-toggle">
           <div class="form-group">
             <input class="cdr_email form-control" type="text" name="cdr_email"
                    placeholder="Email to send CDR's">
           </div>
-          <!-- CDR report interval chooser, based on crontab design -->
-          <!-- TODO: make this a combobox -->
           <div class="form-group">
             <label>CDR Report Interval (minute hour day month weekday)</label>
             <div class="wrapper-horizontal centered">
@@ -241,7 +277,8 @@
                      pattern="\*(/([0-6]))?|([0-6])(,[0-6])*|(sun|mon|tue|wed|thur|fri|sat)">
             </div>
           </div>
-        </div> <!-- end of cdr  tab -->
+        </div>
+        -->
 
         <div id="fusionpbx" class="tab-pane fade in" name="fusion-toggle">
           <div class="form-group">
@@ -355,9 +392,13 @@ systemctl restart fail2ban</code></pre>
           <li role="presentation">
             <a href="#notifications2" name="notifications-toggle" data-toggle="tab">Notifications</a>
           </li>
+          <!--
+          <!--
           <li role="presentation">
             <a href="#cdr2" name="cdr-toggle" data-toggle="tab">CDR</a>
           </li>
+          -->
+          -->
           <li role="presentation">
             <a href="#fusionpbx2" name="fusion-toggle" data-toggle="tab">FusionPBX</a>
           </li>
@@ -468,6 +509,38 @@ systemctl restart fail2ban</code></pre>
             <input class="call_timeout form-control" type="number" name="call_timeout" placeholder="Maximum Call Length (seconds)"
                    autocomplete="off" min="0">
           </div>
+                  {# LOCAL_API_PATCH:prefix_acl_ui — Allowed Destination Prefixes (add) #}
+          <div class="form-group">
+            <label for="allowed_prefixes_add" style="font-weight:normal">
+              Allowed Destination Prefixes
+              <small class="text-muted">(3–5 digits, one per line or comma-separated; leave blank to allow any)</small>
+            </label>
+            <textarea id="allowed_prefixes_add" class="allowed_prefixes form-control" name="allowed_prefixes" rows="4" placeholder="301&#10;30245&#10;445"></textarea>
+          </div>
+                  {# LOCAL_API_PATCH:outbound_prefix_rules_ui — Outbound Prefix Manipulation (add) #}
+          <div class="form-group">
+            <label style="font-weight:normal">
+              Outbound Prefix Manipulation
+              <small class="text-muted">
+                Per dialed-prefix strip + prepend on the way out
+                (1–8 digit prefix; longest match wins)
+              </small>
+            </label>
+            <table id="outbound_prefix_rules_add" class="outbound_prefix_rules table table-condensed" style="margin-bottom: 6px;">
+              <thead>
+                <tr>
+                  <th style="width: 30%">Prefix</th>
+                  <th style="width: 18%">Strip</th>
+                  <th style="width: 38%">Prepend</th>
+                  <th style="width: 14%"></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <button type="button" class="btn btn-default btn-xs outbound_prefix_add_row" data-target="#outbound_prefix_rules_add">
+              <span class="glyphicon glyphicon-plus"></span> Add rule
+            </button>
+          </div>
         </div> <!-- end of call settings tab -->
 
         <div id="notifications2" class="tab-pane fade in" name="notifications-toggle">
@@ -481,13 +554,12 @@ systemctl restart fail2ban</code></pre>
           </div>
         </div> <!-- end of notifications tab -->
 
+        <!--
         <div id="cdr2" class="tab-pane fade in" name="cdr-toggle">
           <div class="form-group">
             <input class="cdr_email form-control" type="text" name="cdr_email"
                    placeholder="Email to send CDR's">
           </div>
-          <!-- CDR report interval chooser, based on crontab design -->
-          <!-- TODO: make this a combobox -->
           <div class="form-group">
             <label>CDR Report Interval (minute, hour, day, month, weekday)</label>
             <div class="wrapper-horizontal centered">
@@ -508,7 +580,8 @@ systemctl restart fail2ban</code></pre>
                      pattern="\*(/([0-6]))?|([0-6])(,[0-6])*|(sun|mon|tue|wed|thur|fri|sat)">
             </div>
           </div>
-        </div> <!-- end of cdr  tab -->
+        </div>
+        -->
 
         <div id="fusionpbx2" class="tab-pane fade in" name="fusion-toggle">
           <div class="form-group">
@@ -628,5 +701,291 @@ systemctl restart fail2ban</code></pre>
 {% block custom_js %}
   {{ script_tag('jquery.tabledit') }}
   {{ script_tag('endpointgroups') }}
+<script type="application/javascript">
+/* LOCAL_API_PATCH:prefix_acl_ui */
+(function() {
+  if (window.__localApiPrefixAclWired) return;
+  window.__localApiPrefixAclWired = true;
+
+  function localApiBase() {
+    // API_BASE_URL is "<scheme>://<host>:<port>/api/v1/" — swap to /api/local/v1/
+    if (typeof API_BASE_URL !== "string") return null;
+    return API_BASE_URL.replace(/\/api\/v1\/?$/, "/api/local/v1/");
+  }
+
+  function parsePrefixes(raw) {
+    if (!raw) return [];
+    return raw.split(/[\s,;]+/).map(function(x) { return x.trim(); })
+              .filter(function(x) { return x.length > 0; });
+  }
+
+  function renderPrefixes(arr) {
+    return (arr || []).join('\n');
+  }
+
+  function loadPrefixesFor(gwgroupid, $textarea) {
+    var base = localApiBase();
+    if (!base || !gwgroupid) return;
+    $.ajax({
+      type: "GET",
+      url: base + "endpointgroups/" + gwgroupid + "/allowed-prefixes",
+      dataType: "json",
+      success: function(resp) {
+        var p = (resp && resp.data && resp.data[0] && resp.data[0].prefixes) || [];
+        $textarea.val(renderPrefixes(p));
+      },
+      error: function(xhr) {
+        // Most likely cause: feature not yet enabled (table missing) — leave blank.
+        if (window.console) console.warn("allowed-prefixes load failed", xhr.status);
+      }
+    });
+  }
+
+  function savePrefixesFor(gwgroupid, prefixes, cb) {
+    var base = localApiBase();
+    if (!base || !gwgroupid) { if (cb) cb(); return; }
+    $.ajax({
+      type: "PUT",
+      url: base + "endpointgroups/" + gwgroupid + "/allowed-prefixes",
+      dataType: "json",
+      contentType: "application/json; charset=utf-8",
+      data: JSON.stringify({ prefixes: prefixes }),
+      success: function() { if (cb) cb(); },
+      error: function(xhr) {
+        if (window.console) console.error("allowed-prefixes save failed", xhr.status, xhr.responseText);
+        if (cb) cb();
+      }
+    });
+  }
+
+  // Edit-modal show: pull current prefixes for the group being edited.
+  $(document).on('show.bs.modal', '#edit', function() {
+    var $modal = $(this);
+    // gwgroupid is set by displayEndpointGroup before the modal fully shows;
+    // give it a tick so the hidden field is populated.
+    setTimeout(function() {
+      var id = $modal.find('.gwgroupid').val();
+      var $ta = $modal.find('#allowed_prefixes_edit');
+      $ta.val('');
+      loadPrefixesFor(id, $ta);
+    }, 50);
+  });
+
+  // Add-modal hidden: clear the textarea (clearEndpointGroupModal doesn't know about it).
+  $(document).on('hidden.bs.modal', '#add', function() {
+    $(this).find('#allowed_prefixes_add').val('');
+  });
+
+  // After upstream save (POST or PUT against /api/v1/endpointgroups), push our prefixes.
+  $(document).ajaxSuccess(function(event, xhr, opts) {
+    if (!opts || !opts.url) return;
+    var url = opts.url;
+    var m = url.match(/\/api\/v1\/endpointgroups(?:\/(\d+))?(?:\?|$)/);
+    if (!m) return;
+    var method = (opts.type || 'GET').toUpperCase();
+    if (method !== 'POST' && method !== 'PUT') return;
+
+    var gwgroupid = m[1];
+    var $ta;
+    if (method === 'POST') {
+      // gwgroupid is in the response payload
+      try {
+        var resp = (typeof xhr.responseJSON !== 'undefined')
+          ? xhr.responseJSON
+          : JSON.parse(xhr.responseText || '{}');
+        gwgroupid = (resp && resp.data && resp.data[0] && resp.data[0].gwgroupid) || null;
+      } catch(e) { gwgroupid = null; }
+      $ta = $('#allowed_prefixes_add');
+    } else {
+      $ta = $('#allowed_prefixes_edit');
+    }
+    if (!gwgroupid) return;
+
+    var prefixes = parsePrefixes($ta.val());
+    // Validate: digits-only, 3–5 chars
+    var bad = prefixes.filter(function(p) { return !/^\d{3,5}$/.test(p); });
+    if (bad.length > 0) {
+      alert("Invalid prefix(es) — must be 3–5 digits each: " + bad.join(', '));
+      return;
+    }
+    savePrefixesFor(gwgroupid, prefixes, function() {
+      if (typeof reloadKamRequired === 'function') reloadKamRequired(true);
+    });
+  });
+})();
+
+/* LOCAL_API_PATCH:outbound_prefix_rules_ui */
+(function() {
+  if (typeof $ === "undefined") return;
+  if (window.__localApiOutboundPrefixWired) return;
+  window.__localApiOutboundPrefixWired = true;
+
+  function localApiBase() {
+    if (typeof API_BASE_URL !== "string") return null;
+    return API_BASE_URL.replace(/\/api\/v1\/?$/, "/api/local/v1/");
+  }
+
+  // jQuery-escape helper used to build attribute selectors
+  function escSel(s) { return (s || '').replace(/(:|\.|\[|\]|,|=|@)/g, '\\$1'); }
+
+  function htmlEscape(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function rowHTML(rule) {
+    var p  = htmlEscape(rule && rule.prefix     != null ? rule.prefix     : '');
+    var s  = htmlEscape(rule && rule.strip      != null ? rule.strip      : 0);
+    var pp = htmlEscape(rule && rule.pri_prefix != null ? rule.pri_prefix : '');
+    return ''
+      + '<tr>'
+      +   '<td><input class="form-control input-sm op_prefix" type="text" maxlength="8" value="' + p + '" placeholder="6661"></td>'
+      +   '<td><input class="form-control input-sm op_strip"  type="number" min="0" max="8" value="' + s + '"></td>'
+      +   '<td><input class="form-control input-sm op_pre"    type="text" maxlength="32" value="' + pp + '" placeholder="+51"></td>'
+      +   '<td><button type="button" class="btn btn-danger btn-xs op_remove_row"><span class="glyphicon glyphicon-trash"></span></button></td>'
+      + '</tr>';
+  }
+
+  function renderRulesInto($table, rules) {
+    var $tb = $table.find('tbody');
+    $tb.empty();
+    (rules || []).forEach(function(r) { $tb.append(rowHTML(r)); });
+  }
+
+  function readRulesFrom($table) {
+    var rules = [];
+    $table.find('tbody tr').each(function() {
+      var $r = $(this);
+      var prefix = ($r.find('.op_prefix').val() || '').trim();
+      if (!prefix) return; // skip empty rows
+      var strip  = parseInt($r.find('.op_strip').val(), 10) || 0;
+      var pre    = ($r.find('.op_pre').val() || '').trim();
+      rules.push({ prefix: prefix, strip: strip, pri_prefix: pre });
+    });
+    return rules;
+  }
+
+  function validateRules(rules) {
+    var seen = {};
+    for (var i = 0; i < rules.length; i++) {
+      var r = rules[i];
+      if (!/^\d{1,8}$/.test(r.prefix)) {
+        return "Invalid prefix '" + r.prefix + "': must be 1–8 digits";
+      }
+      if (!Number.isInteger(r.strip) || r.strip < 0 || r.strip > 8) {
+        return "Invalid strip for prefix " + r.prefix + ": must be 0..8";
+      }
+      if (r.pri_prefix && !/^[\w+#*\-]{0,32}$/.test(r.pri_prefix)) {
+        return "Invalid prepend '" + r.pri_prefix + "' for prefix " + r.prefix;
+      }
+      if (seen[r.prefix]) {
+        return "Duplicate prefix: " + r.prefix;
+      }
+      seen[r.prefix] = true;
+    }
+    return null;
+  }
+
+  function loadRulesFor(gwgroupid, $table) {
+    var base = localApiBase();
+    if (!base || !gwgroupid) return;
+    $.ajax({
+      type: "GET",
+      url: base + "endpointgroups/" + gwgroupid + "/outbound-prefix-rules",
+      dataType: "json",
+      success: function(resp) {
+        var rules = (resp && resp.data && resp.data[0] && resp.data[0].rules) || [];
+        renderRulesInto($table, rules);
+      },
+      error: function(xhr) {
+        if (window.console) console.warn("outbound-prefix-rules load failed", xhr.status);
+        renderRulesInto($table, []);
+      }
+    });
+  }
+
+  function saveRulesFor(gwgroupid, rules, cb) {
+    var base = localApiBase();
+    if (!base || !gwgroupid) { if (cb) cb(); return; }
+    $.ajax({
+      type: "PUT",
+      url: base + "endpointgroups/" + gwgroupid + "/outbound-prefix-rules",
+      dataType: "json",
+      contentType: "application/json; charset=utf-8",
+      data: JSON.stringify({ rules: rules }),
+      success: function() { if (cb) cb(); },
+      error: function(xhr) {
+        if (window.console) console.error("outbound-prefix-rules save failed", xhr.status, xhr.responseText);
+        if (cb) cb();
+      }
+    });
+  }
+
+  // Add Row button
+  $(document).on('click', '.outbound_prefix_add_row', function() {
+    var sel = $(this).data('target');
+    var $table = $(sel);
+    if (!$table.length) return;
+    $table.find('tbody').append(rowHTML({prefix: '', strip: 0, pri_prefix: ''}));
+  });
+
+  // Remove Row button
+  $(document).on('click', '.op_remove_row', function() {
+    $(this).closest('tr').remove();
+  });
+
+  // Edit-modal show: pull current rules
+  $(document).on('show.bs.modal', '#edit', function() {
+    var $modal = $(this);
+    setTimeout(function() {
+      var id = $modal.find('.gwgroupid').val();
+      var $table = $modal.find('#outbound_prefix_rules_edit');
+      renderRulesInto($table, []);
+      loadRulesFor(id, $table);
+    }, 50);
+  });
+
+  // Add-modal hidden: clear table
+  $(document).on('hidden.bs.modal', '#add', function() {
+    renderRulesInto($(this).find('#outbound_prefix_rules_add'), []);
+  });
+
+  // After upstream save (POST/PUT against /api/v1/endpointgroups), push our rules.
+  $(document).ajaxSuccess(function(event, xhr, opts) {
+    if (!opts || !opts.url) return;
+    var m = opts.url.match(/\/api\/v1\/endpointgroups(?:\/(\d+))?(?:\?|$)/);
+    if (!m) return;
+    var method = (opts.type || 'GET').toUpperCase();
+    if (method !== 'POST' && method !== 'PUT') return;
+
+    var gwgroupid = m[1];
+    var $table;
+    if (method === 'POST') {
+      try {
+        var resp = (typeof xhr.responseJSON !== 'undefined')
+          ? xhr.responseJSON
+          : JSON.parse(xhr.responseText || '{}');
+        gwgroupid = (resp && resp.data && resp.data[0] && resp.data[0].gwgroupid) || null;
+      } catch(e) { gwgroupid = null; }
+      $table = $('#outbound_prefix_rules_add');
+    } else {
+      $table = $('#outbound_prefix_rules_edit');
+    }
+    if (!gwgroupid || !$table.length) return;
+
+    var rules = readRulesFrom($table);
+    var err = validateRules(rules);
+    if (err) {
+      alert("Outbound Prefix Manipulation: " + err);
+      return;
+    }
+    saveRulesFor(gwgroupid, rules, function() {
+      if (typeof reloadKamRequired === 'function') reloadKamRequired(true);
+    });
+  });
+})();
+</script>
+
 {% endblock %}
 

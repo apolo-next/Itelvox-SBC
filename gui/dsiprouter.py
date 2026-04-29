@@ -37,6 +37,7 @@ from modules.domain.domain_routes import domains
 from modules.api.api_routes import api
 from modules.api.mediaserver.routes import mediaserver
 from modules.api.carriergroups.routes import carriergroups, addCarrierGroups
+from modules.api.calleridmasks.routes import calleridmasks
 from modules.api.carriergroups.functions import addUpdateCarriers, displayCarrierGroups, displayCarriers
 from modules.api.kamailio.functions import reloadKamailio
 from modules.api.licensemanager.classes import WoocommerceError
@@ -44,6 +45,7 @@ from modules.api.licensemanager.functions import licenseDictToStateDict, getLice
     getLicenseStatus
 from modules.api.licensemanager.routes import license_manager
 from modules.api.auth.routes import user
+from modules.local_api.routes import local_api
 from util.security import Credentials, urandomChars, AES_CTR
 from util.ipc import SETTINGS_SHMEM_NAME, STATE_SHMEM_NAME, createSharedMemoryDict, getSharedMemoryDict
 from util.parse_json import CreateEncoder
@@ -76,15 +78,19 @@ app.register_blueprint(domains)
 app.register_blueprint(api)
 app.register_blueprint(mediaserver)
 app.register_blueprint(carriergroups)
+app.register_blueprint(calleridmasks)
 app.register_blueprint(user)
 app.register_blueprint(license_manager)
+app.register_blueprint(local_api)
 app.register_blueprint(Blueprint('docs', 'docs', static_url_path='/docs', static_folder=settings.DSIP_DOCS_DIR))
 csrf = CSRFProtect(app)
 csrf.exempt(api)
 csrf.exempt(mediaserver)
 csrf.exempt(carriergroups)
+csrf.exempt(calleridmasks)
 csrf.exempt(user)
 csrf.exempt(license_manager)
+csrf.exempt(local_api)
 numbers_api = flowroute.Numbers()
 ansi_converter = Ansi2HTMLConverter(inline=True)
 auth_modules = []
@@ -477,6 +483,28 @@ def displayEndpointGroups():
         debugException(ex)
         error = "server"
         return showError(type=error)
+
+
+@app.route('/calleridmanagement')
+def displayCallerIdManagement():
+    """
+    Display the Caller ID Management page (mask groups + assignments).
+    """
+    try:
+        if not session.get('logged_in'):
+            return redirect(url_for('index'))
+
+        if settings.DEBUG:
+            debugEndpoint()
+
+        return render_template('caller_id_management.html')
+
+    except http_exceptions.HTTPException as ex:
+        debugException(ex)
+        return showError(type='http', code=ex.code, msg=ex.description)
+    except Exception as ex:
+        debugException(ex)
+        return showError(type='server')
 
 
 @app.route('/numberenrichment')

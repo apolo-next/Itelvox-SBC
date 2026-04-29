@@ -189,6 +189,28 @@ function preProcessNetworkMode() {
                         shift
                     fi
                     ;;
+                -iip|--internal-ip=*)
+                    if echo "$1" | grep -q '=' 2>/dev/null; then
+                        FORCE_INTERNAL_IP_ADDR=$(echo "$1" | cut -d '=' -f 2)
+                        shift
+                    else
+                        shift
+                        FORCE_INTERNAL_IP_ADDR="$1"
+                        shift
+                    fi
+                    export FORCE_INTERNAL_IP_ADDR
+                    ;;
+                -eip|--external-ip=*)
+                    if echo "$1" | grep -q '=' 2>/dev/null; then
+                        FORCE_EXTERNAL_IP_ADDR=$(echo "$1" | cut -d '=' -f 2)
+                        shift
+                    else
+                        shift
+                        FORCE_EXTERNAL_IP_ADDR="$1"
+                        shift
+                    fi
+                    export FORCE_EXTERNAL_IP_ADDR
+                    ;;
             esac
         done
     fi
@@ -319,6 +341,20 @@ function setDynamicScriptSettings() {
     else
         printerr 'Network Mode is invalid, can not proceed any further'
         exit 1
+    fi
+
+    # explicit IP overrides (-iip / -eip) win over any detection mode
+    # NOTE: the host must actually carry the address you pass with -iip; pass -eip
+    # for a public IP reached via 1:1 NAT (advertise mode) or also bound to the host
+    # (use -netm 2 for true dual-bind on both interfaces)
+    if [[ -n "$FORCE_INTERNAL_IP_ADDR" ]]; then
+        export INTERNAL_IP_ADDR="$FORCE_INTERNAL_IP_ADDR"
+        # default LAN CIDR to /24 derived from the forced address if not already set
+        [[ -z "$INTERNAL_IP_NET" ]] && export INTERNAL_IP_NET="${FORCE_INTERNAL_IP_ADDR%.*}.0/24"
+    fi
+    if [[ -n "$FORCE_EXTERNAL_IP_ADDR" ]]; then
+        export EXTERNAL_IP_ADDR="$FORCE_EXTERNAL_IP_ADDR"
+        export UAC_REG_ADDR="$FORCE_EXTERNAL_IP_ADDR"
     fi
 
     # if the public ip address is not the same as the internal address then enable serverside NAT
@@ -1385,6 +1421,11 @@ function configureKamailioDB() {
     # Install schema for dsip_cdrinfo
     withRootDBConn --db="$KAM_DB_NAME" mysql \
         < ${PROJECT_DSIP_DEFAULTS_DIR}/dsip_cdrinfo.sql
+
+    # Install schema for dsip_caller_id_mask_groups / _masks / _mask_assignments
+    # plus the htable views consumed by Kamailio (dsip_caller_id_*_h).
+    withRootDBConn --db="$KAM_DB_NAME" mysql \
+        < ${PROJECT_DSIP_DEFAULTS_DIR}/dsip_caller_id_masks.sql
 
     # Install schema for dsip_settings
     perl -e "\$hlen='$HASHED_CREDS_ENCODED_MAX_LEN'; \$clen='$AESCTR_CREDS_ENCODED_MAX_LEN';" \
@@ -3859,9 +3900,10 @@ function usageOptions() {
     linebreak
     printf "\n%-s%24s%s\n" \
         "$(pprint -n COMMAND)" " " "$(pprint -n OPTIONS)"
-    printf "%-30s %s\n%-30s %s\n%-30s %s\n%-30s %s\n%-30s %s\n" \
+    printf "%-30s %s\n%-30s %s\n%-30s %s\n%-30s %s\n%-30s %s\n%-30s %s\n" \
         "install" "[-debug|-all|--all|-kam|--kamailio|-dsip|--dsiprouter|-rtp|--rtpengine|-dns|--dnsmasq" \
         " " "-dmz <pub iface>,<priv iface>|--dmz=<pub iface>,<priv iface>|-netm <mode>|--network-mode=<mode>|-homer <homerhost[:heplifyport]>|" \
+        " " "-iip <internal/lan ip>|--internal-ip=<internal/lan ip>|-eip <external/wan ip>|--external-ip=<external/wan ip>|" \
         " " "-db <[user[:pass]@]dbhost[:port][/dbname]>|--database=<[user[:pass]@]dbhost[:port][/dbname]>|-dsipcid <num>|--dsip-clusterid=<num>|" \
         " " "-dbadmin <[user[:pass]@]dbhost[:port][/dbname]>|--database-admin=<[user[:pass]@]dbhost[:port][/dbname]>|-dsipcsync <num>|" \
         " " "--dsip-clustersync=<num>|-dsipkey <32 chars>|--dsip-privkey=<32 chars>|-with_lcr|--with_lcr=<num>|-with_dev|--with_dev=<num>]"
@@ -4089,6 +4131,15 @@ function processCMD() {
                         else
                             shift
                             NETWORK_MODE="$1"
+                            shift
+                        fi
+                        ;;
+                    # already consumed by preProcessNetworkMode, just eat the args here
+                    -iip|--internal-ip=*|-eip|--external-ip=*)
+                        if echo "$1" | grep -q '=' 2>/dev/null; then
+                            shift
+                        else
+                            shift
                             shift
                         fi
                         ;;

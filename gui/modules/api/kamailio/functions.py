@@ -100,6 +100,12 @@ def reloadKamailio():
             ('127.0.0.1', 'htable.reload', ['inbound_failfwd']),
             ('127.0.0.1', 'htable.reload', ['prefix_to_route']),
         ]
+        # caller-id mask htables are intentionally NOT in the unconditional
+        # startup reload list. Kamailio loads them from the DB at start and
+        # the calleridmasks API blueprint reloads them after every mutation,
+        # so an extra reload here is redundant — and would crash dsiprouter
+        # boot with "No such htable" if Kamailio is still running an older
+        # config that doesn't define them yet.
 
         # reload data depending on the features enabled
         features_enabled = {
