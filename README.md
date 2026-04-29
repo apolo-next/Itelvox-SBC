@@ -1,4 +1,69 @@
-# dSIPRouter Platform
+# Itelvox-SBC
+
+> Fork de [dSIPRouter](https://github.com/dOpensource/dsiprouter) customizado para desplegar la variante SBC de Itelvox sobre Kamailio + RTPEngine + dSIPRouter.
+
+Este repositorio extiende dSIPRouter con:
+
+- **Local API blueprint** (`gui/modules/local_api/`) — endpoints REST autenticados por token (`Bearer DSIP_API_TOKEN`) o sesión activa de la GUI, que reusan los modelos del core sin exponer el token al cliente.
+- **Caller ID Mask Groups** (`gui/modules/api/calleridmasks/`, `gui/templates/caller_id_management.html`, `kamailio/defaults/dsip_caller_id_masks.sql`) — gestión de máscaras de Caller ID con UI dedicada.
+- **Endpoint prefix gating** — schemas `dsip_endpoint_allowed_prefixes` y `dsip_endpoint_outbound_prefix` con sus htables y rutas en `kamailio.cfg`.
+- **Flags `-iip` / `-eip`** en `dsiprouter.sh` para configurar IP interna/externa.
+- **RTPEngine kernel-fwd fix** — uso de `dlg_var(dst_media_tp)` en `rtpengine/configs/rtpengine.conf`.
+- **Performance tuning SBC** — `children=8`, SHM=2048, RTPEngine ports 30000-60000 con num-threads=16, `/etc/sysctl.d/90-dsiprouter.conf`, drop-ins systemd con `LimitNOFILE=1048576`.
+- **Lab opcional** auto-contenido (`sbc-lab-setup.sh`) con topología 172.17.100/24.
+
+## Scripts del fork
+
+Los tres scripts en la raíz del repo se ejecutan en cadena sobre la instalación upstream:
+
+| Archivo | Rol |
+|---|---|
+| `local_api_patch.sh` | Aplica los parches a nivel de fuente sobre el árbol de dSIPRouter. Idempotente vía marcadores `LOCAL_API_PATCH:*`. |
+| `sbc-install.sh` | Instalador SBC top-level. Llama a `local_api_patch.sh` y añade tuning de rendimiento, sysctl, drop-ins systemd y el esquema `caller_id_masks`. Usa `verify_source_features` para fallar rápido si faltan features esperadas en el árbol fuente. |
+| `sbc-lab-setup.sh` | Opcional. Despliega `/opt/test-lab/` (embebido como tar+base64). Configura alias de IP vía systemd oneshot. Variables `LAB_*` para customizar la topología. |
+
+## Instalación (servidor nuevo)
+
+```bash
+git clone https://github.com/apolo-next/Itelvox-SBC.git /opt/dsiprouter
+cd /opt/dsiprouter
+./dsiprouter.sh install -iip <IP_INTERNA> -eip <IP_EXTERNA>
+./sbc-install.sh
+# Opcional:
+./sbc-lab-setup.sh
+```
+
+## Sincronizar con upstream
+
+El remote `upstream` apunta a `dOpensource/dsiprouter`. Para integrar cambios upstream en el fork:
+
+```bash
+git remote add upstream https://github.com/dOpensource/dsiprouter.git  # solo si no está
+git fetch upstream
+git merge upstream/master   # o rebase, según preferencia
+git push origin master
+```
+
+Después de un merge, re-ejecutar `local_api_patch.sh` y `sbc-install.sh` en los servidores. Ambos son idempotentes (marcadores `LOCAL_API_PATCH:*`, `# SBC_INSTALL:*_v1`).
+
+## Idempotencia
+
+| Marcador | Dónde |
+|---|---|
+| `LOCAL_API_PATCH:*` | Archivos parcheados |
+| `# SBC_INSTALL:*_v1` | Drop-ins de systemd / sysctl |
+| `# SBC_LAB:*_v1` | Archivos de alias de IP del lab |
+| `.sbc_lab_extracted` | Touch-file que marca extracción del lab |
+
+El DDL de `caller_id_masks` es no-destructivo por defecto (se omite si `dsip_caller_id_mask_groups` ya existe). Forzar recreación: `FORCE_CALLER_ID_SCHEMA=1`.
+
+## Caja de referencia
+
+`sbc01.itelvox.com` — Debian 12, 172.17.100.10 privada, 45.71.33.106 pública, interfaces `ens192` / `ens224`.
+
+---
+
+# dSIPRouter Platform (upstream)
 
 
 [<p align="center"><img src="docs/dsiprouter_300px.png" alt="dSIPRouter Logo" width="300"/></p>](https://dsiprouter.org)
