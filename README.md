@@ -22,16 +22,108 @@ Los tres scripts en la raíz del repo se ejecutan en cadena sobre la instalació
 | `sbc-install.sh` | Instalador SBC top-level. Llama a `local_api_patch.sh` y añade tuning de rendimiento, sysctl, drop-ins systemd y el esquema `caller_id_masks`. Usa `verify_source_features` para fallar rápido si faltan features esperadas en el árbol fuente. |
 | `sbc-lab-setup.sh` | Opcional. Despliega `/opt/test-lab/` (embebido como tar+base64). Configura alias de IP vía systemd oneshot. Variables `LAB_*` para customizar la topología. |
 
-## Instalación (servidor nuevo)
+## Instalación detallada
+
+El repo ya contiene todo el árbol customizado, así que el flujo es más simple que la variante histórica con rsync desde caja de referencia.
+
+### Pre-requisitos del servidor
+
+- **OS:** Debian 12 (lo validado en `sbc01.itelvox.com`). Otras versiones soportadas por dSIPRouter podrían funcionar, pero solo Debian 12 está probado en este fork.
+- **Acceso root** o sudo sin password.
+- **Conectividad a internet** para apt y para clonar GitHub.
+- **DNS / hostname** del servidor configurados antes de instalar (Kamailio toma decisiones basadas en hostname).
+- **Interfaces de red:** identifica la interna (LAN privada) y la externa (WAN pública). En la caja de referencia son `ens192` (privada) y `ens224` (pública).
+
+### 1. Clonar el fork
+
+El repo es público — no necesitas token para clonar.
 
 ```bash
 git clone https://github.com/apolo-next/Itelvox-SBC.git /opt/dsiprouter
 cd /opt/dsiprouter
-./dsiprouter.sh install -iip <IP_INTERNA> -eip <IP_EXTERNA>
+```
+
+> Si más adelante quieres hacer `git push` desde este servidor, configura SSH:
+> ```bash
+> git remote set-url origin git@github.com:apolo-next/Itelvox-SBC.git
+> ```
+> y añade la clave pública del servidor a la cuenta `apolo-next` en GitHub.
+
+### 2. Instalación upstream con flags de IP
+
+`dsiprouter.sh install` provisiona Kamailio, RTPEngine, MySQL, Nginx, Python venv, la GUI y systemd. Los flags `-iip` / `-eip` (añadidos por este fork) fijan las IPs interna y externa explícitamente, en lugar de auto-detectarlas.
+
+```bash
+cd /opt/dsiprouter
+./dsiprouter.sh install -iip 172.17.100.10 -eip 45.71.33.106
+```
+
+Reemplaza:
+- `172.17.100.10` → IP privada del servidor (la que carga `ens192` o equivalente)
+- `45.71.33.106` → IP pública (WAN/NAT externa)
+
+> ⚠ El host **debe** tener efectivamente la IP que pasas con `-iip` configurada en alguna interfaz. La de `-eip` puede ser la NAT externa y no estar presente en el host.
+
+Esta etapa toma varios minutos. Al terminar, imprime las credenciales (DSIP password, API token, IPC password, Kamailio DB password) — **guárdalas**, no se vuelven a mostrar igual. La GUI queda en `https://<ip>:5000`.
+
+### 3. Capa SBC
+
+`sbc-install.sh` aplica el tuning SBC, parches operativos (vía `local_api_patch.sh`) y carga el esquema `caller_id_masks`. Como el árbol fuente viene customizado en el fork, este paso queda principalmente como tuning + DDL.
+
+```bash
+cd /opt/dsiprouter
 ./sbc-install.sh
-# Opcional:
+```
+
+Hace en orden:
+
+1. Tuning de `kamailio.cfg` (`children=8`, `tcp_*`) y `/etc/default/kamailio.conf` (SHM=2048 / PKG)
+2. Tuning de `rtpengine.conf` (puertos 30000-60000, `num-threads=16`)
+3. `/etc/sysctl.d/90-dsiprouter.conf` (buffers UDP, conntrack, fd limits) + `sysctl --system`
+4. Drop-ins systemd con `LimitNOFILE=1048576` para kamailio y rtpengine
+5. Llama a `local_api_patch.sh` (idempotente — la mayoría son no-ops porque el código ya está en el fork)
+6. Carga `kamailio/defaults/dsip_caller_id_masks.sql`
+7. `systemctl restart kamailio rtpengine dsiprouter`
+
+Variables útiles:
+
+| Variable | Efecto |
+|---|---|
+| `NO_RESTART=1` | No reiniciar servicios al final |
+| `SKIP_LOCAL_API_PATCH=1` | Saltar paso 5 |
+| `SKIP_CALLER_ID_SCHEMA=1` | Saltar carga del DDL |
+| `FORCE_CALLER_ID_SCHEMA=1` | Recrea destructivamente las tablas de `caller_id_masks` |
+
+### 4. (Opcional) Lab de pruebas
+
+Solo para entornos de pruebas. Despliega `/opt/test-lab/` y configura alias de IP en la interfaz interna.
+
+```bash
 ./sbc-lab-setup.sh
 ```
+
+Variables `LAB_*` para customizar la topología (defaults: SBC=`.10`, client=`.50`, sipp UAC=`.51`, PSTN/UAS=`.52` en `172.17.100/24`, interfaz `ens192`).
+
+### 5. Verificación post-instalación
+
+```bash
+# Servicios arriba
+systemctl status kamailio rtpengine dsiprouter --no-pager
+
+# Puertos escuchando
+ss -tulnp | grep -E ':(5060|5061|5080|5000|22222)'
+
+# RTPEngine en su rango
+ss -uln | awk '$5 ~ /:30[0-9]{3}|:[3-5][0-9]{4}/ {print; n++} END {print "rtpe sockets:", n+0}'
+
+# GUI accesible (desde el host)
+curl -k -sI https://localhost:5000 | head -3
+
+# Tablas SBC presentes
+mysql -e "SHOW TABLES FROM kamailio LIKE 'dsip_%';" | grep -E 'caller_id_mask|endpoint_(allowed|outbound)_prefix'
+```
+
+GUI: `https://<eip>:5000`, login `admin` + el password mostrado en el paso 2.
 
 ## Sincronizar con upstream
 
